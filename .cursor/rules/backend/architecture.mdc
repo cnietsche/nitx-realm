@@ -1,0 +1,71 @@
+---
+description: Backend modular monolith with Clean Architecture (layers, modules, dependency rule)
+globs: backend/**
+alwaysApply: false
+---
+
+# Backend Architecture
+
+The backend is a **modular monolith** built with **Clean Architecture** and Clean Code.
+Java + Spring Boot. Base package: `com.nitxrealm` (no hyphen — Java packages cannot contain `-`).
+
+## Module organization
+
+Code is organized by **business module** (bounded context), not by technical layer at the top.
+Each module is self-contained and owns its full vertical slice.
+
+```
+backend/src/main/java/com/nitxrealm/
+├── NitxRealmApplication.java
+└── {module-name}/              # e.g. user, billing, catalog
+    ├── domain/
+    ├── application/
+    ├── infrastructure/
+    └── presentation/
+```
+
+## Layers (inside each module)
+
+| Layer | Responsibility | Knows about |
+|-------|----------------|-------------|
+| `domain` | Pure business model & rules. No frameworks. | nothing (innermost) |
+| `application` | Use cases orchestrating domain. Defines ports (interfaces) it needs. | `domain` |
+| `infrastructure` | Adapters: DB, email, security, messaging. Implements ports. | `domain`, `application` |
+| `presentation` | Entry points: REST controllers, request/response DTOs. | `application` |
+
+## The Dependency Rule (most important)
+
+Dependencies always point **inward**. Outer layers depend on inner layers, never the reverse.
+
+```
+presentation ─┐
+              ├──► application ──► domain
+infrastructure┘
+```
+
+- `domain` MUST NOT import `application`, `infrastructure`, `presentation`, or any framework (no Spring, no JPA, no Jackson).
+- `application` MUST NOT import `infrastructure` or `presentation`. It depends on **interfaces** (ports) it declares in `domain`/`application`.
+- `infrastructure` and `presentation` depend inward and wire concrete implementations.
+
+```java
+// ❌ BAD: domain depends on a framework / outer layer
+package com.nitxrealm.user.domain.model;
+import jakarta.persistence.Entity;        // infra concern leaking into domain
+import com.nitxrealm.user.infrastructure.persistence.JpaUserEntity;
+
+// ✅ GOOD: domain is pure
+package com.nitxrealm.user.domain.model;
+public final class User { /* business rules only */ }
+```
+
+## Cross-module communication
+
+- Modules talk through **public application use cases** or **domain events**, never by reaching into another module's `infrastructure` or `domain.model` internals.
+- Prefer asynchronous **domain events** for decoupling (see `application.mdc` handlers + `infrastructure` event publisher).
+- No shared mutable state between modules.
+
+## Layer-specific rules
+
+See the focused rules for each concern: `domain.mdc`, `application.mdc`,
+`infrastructure.mdc`, `persistence.mdc`, `presentation.mdc`, `spring-boot.mdc`,
+`clean-code.mdc`, `tests.mdc`.

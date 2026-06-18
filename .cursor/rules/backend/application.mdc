@@ -1,0 +1,71 @@
+---
+description: Application layer rules (use cases, DTOs/commands, event handlers)
+globs: backend/**/application/**
+alwaysApply: false
+---
+
+# Application Layer
+
+Orchestrates the domain to fulfill use cases. Depends only on `domain`.
+MUST NOT import `infrastructure` or `presentation`.
+
+## Structure
+
+```
+application/
+├── usecase/   # One class per use case
+├── dto/       # Commands (input) + Responses (output)
+└── handler/   # Domain event handlers
+```
+
+## Use cases (`usecase/`)
+
+- **One use case = one class** with a single public entry method (`execute`/`handle`).
+- Named after the business action: `CreateUserUseCase`, `ConfirmAccountUseCase`.
+- Receive domain ports via constructor injection (depend on interfaces, not implementations).
+- Coordinate domain objects + ports; contain no framework logic and no business
+  invariants that belong in the domain.
+
+```java
+public class CreateUserUseCase {
+    private final UserRepository userRepository;
+    private final PasswordHasher passwordHasher;
+    private final EventPublisher eventPublisher;
+
+    public CreateUserUseCase(UserRepository userRepository,
+                             PasswordHasher passwordHasher,
+                             EventPublisher eventPublisher) {
+        this.userRepository = userRepository;
+        this.passwordHasher = passwordHasher;
+        this.eventPublisher = eventPublisher;
+    }
+
+    public UserResponse execute(CreateUserCommand command) {
+        if (userRepository.findByEmail(new Email(command.email())).isPresent())
+            throw new EmailAlreadyInUseException(command.email());
+        var user = User.register(command.name(),
+                                 new Email(command.email()),
+                                 passwordHasher.hash(command.password()));
+        var saved = userRepository.save(user);
+        eventPublisher.publish(new UserRegisteredEvent(saved.id()));
+        return UserResponse.from(saved);
+    }
+}
+```
+
+## DTOs (`dto/`)
+
+- **Commands** = use case input (`CreateUserCommand`, `LoginCommand`).
+- **Responses** = use case output (`UserResponse`). Decouple callers from domain models.
+- Prefer Java `record`s. Never expose domain entities directly across the boundary.
+
+## Event handlers (`handler/`)
+
+- React to domain events: `UserRegisteredEventHandler` triggers e.g. sending a welcome email
+  via an application port. Keep handlers thin; delegate to use cases/ports.
+
+## Ports
+
+- If a use case needs an external capability, depend on an **interface** (defined in
+  `domain` or `application`). The concrete adapter lives in `infrastructure`.
+- Transaction boundaries belong here (the use case), not in the domain.

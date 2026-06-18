@@ -1,0 +1,45 @@
+---
+description: Clean Code & SOLID conventions for backend Java code
+globs: backend/**/*.java
+alwaysApply: false
+---
+
+# Clean Code (Java)
+
+## Naming
+
+- Reveal intent. Classes = nouns (`CreateUserUseCase`), methods = verbs (`confirmAccount`).
+- No abbreviations or single letters (except loop indices). No Hungarian notation.
+- Booleans read as predicates: `isActive`, `hasConfirmedEmail`.
+
+## Methods & classes
+
+- Small functions; do **one thing**. Prefer ≤ ~20 lines and few parameters (≤ 3 — use a command/record otherwise).
+- One public responsibility per class (SRP). Split when a class grows multiple reasons to change.
+- Avoid deep nesting — use early returns / guard clauses.
+
+```java
+// ✅ GOOD: guard clauses, single responsibility
+public UserResponse execute(CreateUserCommand cmd) {
+    if (cmd == null) throw new IllegalArgumentException("command required");
+    if (userRepository.findByEmail(new Email(cmd.email())).isPresent())
+        throw new EmailAlreadyInUseException(cmd.email());
+    ...
+}
+```
+
+## SOLID
+
+- **S**: one reason to change per class.
+- **O**: extend via new implementations of ports, not by editing existing logic.
+- **L**: subtypes honor the contract of their interface.
+- **I**: small, focused ports (`PasswordHasher`, `TokenGenerator`) over fat interfaces.
+- **D**: depend on abstractions (ports), inject implementations from the outside.
+
+## Other
+
+- Prefer immutability: `final` fields, `record`s for data, no setters where avoidable.
+- Avoid `null` in return values — use `Optional`. Validate inputs at boundaries.
+- Throw specific exceptions; never swallow them silently. Use a logger, never `printStackTrace`/`System.out`.
+- No dead code, no commented-out blocks. Comments explain **why**, not what.
+- Keep formatting consistent; let the build's formatter/linter enforce style.

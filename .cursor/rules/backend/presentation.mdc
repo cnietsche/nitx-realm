@@ -1,0 +1,58 @@
+---
+description: Presentation layer rules (REST controllers, request/response DTOs, error handling)
+globs: backend/**/presentation/**
+alwaysApply: false
+---
+
+# Presentation Layer
+
+The HTTP entry point. Depends only on `application`. Thin: translate HTTP ⇄ use cases.
+
+## Structure
+
+```
+presentation/
+├── controller/   # REST controllers
+├── request/      # Inbound HTTP DTOs (CreateUserRequest, LoginRequest)
+└── response/     # Outbound HTTP DTOs (UserResponse, AuthResponse)
+```
+
+## Controllers
+
+- Keep them **thin**: validate input, call a use case, map to a response. No business logic.
+- Inject use cases via constructor. One controller per resource/aggregate.
+- Map request DTO → application command, and application response → HTTP response DTO.
+
+```java
+@RestController
+@RequestMapping("/api/users")
+public class UserController {
+    private final CreateUserUseCase createUser;
+
+    public UserController(CreateUserUseCase createUser) { this.createUser = createUser; }
+
+    @PostMapping
+    public ResponseEntity<UserResponse> create(@Valid @RequestBody CreateUserRequest request) {
+        var result = createUser.execute(request.toCommand());
+        return ResponseEntity.status(HttpStatus.CREATED).body(UserResponse.from(result));
+    }
+}
+```
+
+## Request / Response DTOs
+
+- Use `record`s. Validate inbound requests with Jakarta Bean Validation (`@NotBlank`, `@Email`).
+- Presentation DTOs are separate from application DTOs and domain models — never expose entities.
+- `request` DTOs convert to application **commands**; `response` DTOs are built from application results.
+
+## Error handling
+
+- Centralize with a `@RestControllerAdvice` exception handler (place in a shared/common package).
+- Map domain/application exceptions to proper HTTP status + a consistent error body
+  (e.g. `EmailAlreadyInUseException → 409`, validation → `400`, not found → `404`).
+- Never leak stack traces or internal messages to clients.
+
+## Conventions
+
+- REST URLs: plural nouns, kebab/lowercase (`/api/users`, `/api/users/{id}/confirm`).
+- Use correct HTTP verbs and status codes; return `201` on creation with the created resource.

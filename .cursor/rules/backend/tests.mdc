@@ -1,0 +1,47 @@
+---
+description: Testing strategy for the backend (unit, integration, naming, structure)
+globs: backend/src/test/**
+alwaysApply: false
+---
+
+# Testing
+
+Tests mirror the production package structure under `backend/src/test/java/com/nitxrealm/{module}`.
+JUnit 5 + AssertJ; Mockito for ports.
+
+## Test pyramid by layer
+
+| Layer | Test type | How |
+|-------|-----------|-----|
+| `domain` | Pure unit tests | No mocks, no Spring. Exercise invariants & value objects directly. |
+| `application` (use cases) | Unit tests | Mock the ports (repositories, hashers, publishers). No Spring context. |
+| `infrastructure` (persistence/adapters) | Integration tests | `@DataJpaTest` / Testcontainers for real DB; verify mapping & queries. |
+| `presentation` (controllers) | Slice tests | `@WebMvcTest` + MockMvc; mock the use cases. |
+
+## Rules
+
+- Favor fast, isolated unit tests for `domain` and `application` (the bulk of coverage).
+- Use a Spring context only where it adds value (controller slices, persistence integration).
+- One behavior per test. Follow **Arrange–Act–Assert** (given/when/then).
+- Test names describe behavior: `should_throw_when_email_already_in_use`.
+- Build domain objects with test data builders/factories to keep tests readable.
+
+```java
+@Test
+void should_throw_when_email_already_in_use() {
+    // given
+    var repo = mock(UserRepository.class);
+    when(repo.findByEmail(any())).thenReturn(Optional.of(anExistingUser()));
+    var useCase = new CreateUserUseCase(repo, hasher, publisher);
+
+    // when / then
+    assertThatThrownBy(() -> useCase.execute(aCreateUserCommand()))
+        .isInstanceOf(EmailAlreadyInUseException.class);
+}
+```
+
+## Don't
+
+- Don't assert on private internals — test through public behavior.
+- Don't share mutable state between tests; keep each test independent.
+- Don't load the full application context when a slice test suffices.

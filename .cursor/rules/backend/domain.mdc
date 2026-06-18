@@ -1,0 +1,68 @@
+---
+description: Domain layer rules (models, value objects, repository ports, domain services, events)
+globs: backend/**/domain/**
+alwaysApply: false
+---
+
+# Domain Layer
+
+The innermost layer. Pure business model and rules. **Zero framework dependencies**
+(no Spring, JPA, Jackson, Lombok annotations tied to infra). Plain Java only.
+
+## Structure
+
+```
+domain/
+├── model/        # Entities + Value Objects
+├── repository/   # Repository PORTS (interfaces only)
+├── service/      # Domain service PORTS / pure domain logic
+└── event/        # Domain events
+```
+
+## Entities & Value Objects (`model/`)
+
+- Encapsulate invariants in the constructor — an object is **always valid** once created.
+- Prefer immutability: `final` fields, no setters. Use methods to produce new states.
+- Value Objects (e.g. `Email`) wrap primitives and self-validate. Avoid primitive obsession.
+
+```java
+// ✅ GOOD: self-validating value object, no framework
+public final class Email {
+    private final String value;
+    public Email(String value) {
+        if (value == null || !value.contains("@"))
+            throw new InvalidEmailException(value);
+        this.value = value.toLowerCase();
+    }
+    public String value() { return value; }
+}
+```
+
+## Repository ports (`repository/`)
+
+- **Interfaces only**, expressed in domain terms. Implemented in `infrastructure/persistence`.
+- Methods speak the ubiquitous language and return domain models, never JPA entities.
+
+```java
+public interface UserRepository {
+    Optional<User> findById(UserId id);
+    Optional<User> findByEmail(Email email);
+    User save(User user);
+}
+```
+
+## Domain services (`service/`)
+
+- Interfaces for capabilities the domain needs but cannot implement itself
+  (e.g. `PasswordHasher`, `TokenGenerator`). Implemented in `infrastructure`.
+
+## Domain events (`event/`)
+
+- Immutable records describing something that happened: `UserRegisteredEvent`.
+- Past tense names. Carry only the data needed by handlers.
+
+## Rules
+
+- Throw **domain-specific exceptions** (e.g. `InvalidEmailException`), not generic ones.
+- No `@Entity`, `@Component`, `@Autowired`, or any annotation here.
+- No I/O (DB, HTTP, files) — that belongs to infrastructure.

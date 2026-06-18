@@ -1,0 +1,47 @@
+---
+description: Infrastructure layer rules (adapters implementing domain/application ports)
+globs: backend/**/infrastructure/**
+alwaysApply: false
+---
+
+# Infrastructure Layer
+
+Adapters that implement the ports declared by `domain`/`application`.
+This is where frameworks and external systems live (Spring, JPA, HTTP clients, etc.).
+
+## Structure
+
+```
+infrastructure/
+├── persistence/   # JPA entities, repository impls, mappers (see persistence.mdc)
+├── email/         # e.g. ResendEmailSender
+├── security/      # e.g. JwtTokenGenerator, BCryptPasswordHasher
+└── event/         # e.g. SpringEventPublisher
+```
+
+## Rules
+
+- Each adapter **implements a port interface** from the inner layers. Name it by technology:
+  `BCryptPasswordHasher implements PasswordHasher`, `ResendEmailSender implements EmailSender`.
+- Adapters translate between the outside world and domain types — domain stays unaware of the tech.
+- This is the only layer allowed to reference vendor SDKs / Spring infrastructure annotations
+  (`@Repository`, `@Component`, config classes).
+- Read secrets/config from Spring config (`@Value`/`@ConfigurationProperties`), never hardcode.
+
+```java
+// ✅ GOOD: infra implements a domain port using a vendor lib
+@Component
+public class BCryptPasswordHasher implements PasswordHasher {
+    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+    @Override public String hash(String raw) { return encoder.encode(raw); }
+    @Override public boolean matches(String raw, String hashed) {
+        return encoder.matches(raw, hashed);
+    }
+}
+```
+
+## Don't
+
+- Don't put business rules here — only translation/integration.
+- Don't let an adapter leak vendor types (e.g. a JPA entity, an SDK response) into
+  `domain`/`application`. Map to domain types at the boundary.

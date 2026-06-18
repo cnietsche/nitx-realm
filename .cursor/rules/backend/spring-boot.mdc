@@ -1,0 +1,46 @@
+---
+description: Spring Boot conventions (DI, configuration, wiring without polluting inner layers)
+globs: backend/**
+alwaysApply: false
+---
+
+# Spring Boot Conventions
+
+Spring is an **infrastructure detail**. Keep the framework at the edges; inner layers stay POJO.
+
+## Dependency injection
+
+- Always use **constructor injection** with `final` fields. Never field injection (`@Autowired` on fields).
+- `domain` and `application` classes are plain Java — no Spring annotations.
+- Wire use cases (which have no annotations) via `@Bean` methods in `@Configuration` classes
+  in `infrastructure` (a per-module `*Config`). Adapters may use `@Component`/`@Repository`.
+
+```java
+// infrastructure config wires a framework-free use case
+@Configuration
+public class UserModuleConfig {
+    @Bean
+    CreateUserUseCase createUserUseCase(UserRepository repo,
+                                        PasswordHasher hasher,
+                                        EventPublisher publisher) {
+        return new CreateUserUseCase(repo, hasher, publisher);
+    }
+}
+```
+
+## Configuration
+
+- Externalize config in `application.yml`; use profiles (`application-{env}.yml`) per environment.
+- Bind config with `@ConfigurationProperties` (typed) over scattered `@Value`.
+- Secrets come from environment variables / a secrets manager — never commit them.
+
+## Web & validation
+
+- Enable Jakarta Bean Validation on request DTOs (`@Valid`).
+- Use `@RestControllerAdvice` for global error handling (see `presentation.mdc`).
+
+## General
+
+- Keep `NitxRealmApplication` minimal (`@SpringBootApplication` + `main`).
+- Prefer constructor-based, testable components; avoid static/global state and the service locator pattern.
+- Don't sprinkle `@Transactional` on the domain — apply it at the application/use-case boundary.

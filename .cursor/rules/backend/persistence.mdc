@@ -1,0 +1,52 @@
+---
+description: Persistence rules (JPA entities, repository implementations, mappers)
+globs: backend/**/infrastructure/persistence/**
+alwaysApply: false
+---
+
+# Persistence
+
+Lives under `infrastructure/persistence`. Keeps JPA fully isolated from the domain.
+
+## Three building blocks
+
+| File | Role |
+|------|------|
+| `JpaUserEntity` | JPA-annotated table mapping. A persistence detail, **not** the domain model. |
+| `JpaUserRepository` | Implements the domain `UserRepository` port; uses Spring Data internally. |
+| `UserMapper` | Converts `JpaUserEntity` ⇄ domain `User`. |
+
+## Rules
+
+- **Never** annotate domain models with `@Entity`. Persistence uses separate `Jpa*Entity` classes.
+- The domain `UserRepository` interface (port) lives in `domain/repository`; its implementation
+  lives here and returns **domain models**, mapping via the mapper.
+- A Spring Data interface (`*JpaCrudRepository extends JpaRepository`) may be used as an internal
+  collaborator, but the port implementation is what the rest of the app depends on.
+
+```java
+// domain port -> infra implementation that maps to/from domain
+@Repository
+public class JpaUserRepository implements UserRepository {
+    private final UserJpaCrudRepository crud;   // Spring Data, internal
+    private final UserMapper mapper;
+
+    @Override
+    public Optional<User> findByEmail(Email email) {
+        return crud.findByEmail(email.value()).map(mapper::toDomain);
+    }
+
+    @Override
+    public User save(User user) {
+        return mapper.toDomain(crud.save(mapper.toEntity(user)));
+    }
+}
+```
+
+## Conventions
+
+- Table/column names: `snake_case`. Class names: `Jpa{Aggregate}Entity`.
+- Use schema migrations (Flyway/Liquibase) under `resources/db/migration`; do not rely on
+  `hibernate.ddl-auto=update` in production.
+- Keep queries close to the repository implementation; prefer derived queries or `@Query`
+  over scattering raw SQL across the codebase.
